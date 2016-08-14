@@ -4,6 +4,7 @@
 #include<set>
 #include<memory>
 #include<utility>
+#include<cassert>
 #include "geometry.h"
 namespace{
 
@@ -63,7 +64,7 @@ bool point_comparator(const point_t & a,const point_t & b){
 	return a.x > b.x || (a.x == b.x  && a.y > b.y);
 }
 
-bool point_cos0_comparator(const std::pair<point_t*,double>& a,const std::pair<point_t*,double>& b){
+bool point_cos0_comparator(const std::pair<point_t,double>& a,const std::pair<point_t,double>& b){
 	// pair::second keeps cos0 value
 	return a.first.x > b.first.x || (a.first.x == b.first.x  && a.first.y > b.first.y ) ||
 	      ( a.first.x == b.first.x && a.first.y == b.first.y && a.second > b.second );
@@ -92,17 +93,31 @@ class point_event{
 };
 */
 
-double calc_cos(const point_t & p1,const
+/*
+ *     . . . p1 
+ *     .   0/
+ *     .   /
+ *     .  /
+ *     . /          
+ *     p2          
+ *
+ * p1 should be the event point
+ */
+double calc_cos(const point_t & p1,const point_t & p2){
+
+	double X,Y;	
+	assert( p1.x == p2.x && p1.y == p2.y );
+	X = p2.x - p1.x;
+	Y = p2.y - p1.y;
+	return  X/sqrt(X*X + Y*Y);
+}
 
 void segment_insert(struct rb_root *root, segment_t *data){
 	
   	struct rb_node **cur = &(root->rb_node), *parent = NULL;
-	double cos[2];
   	/* Figure out where to put new node */
   	while (*cur) {
   		segment_t *seg = container_of(*cur, segment_t, rbnode);
-  	//	int result;
-		cos[0] = (data->p[1].x - event_point.x)/
   		int result = point_cos0_comparator(*((std::pair<point_t,double>*)data->priv), *((std::pair<point_t,double>*)seg->priv));
 
 		parent = *cur;
@@ -143,9 +158,8 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 	for(size_t i = 0 ;i < segs.size() ; i++){
 		point_event.insert(segs[i].p[0]);
 		point_event.insert(segs[i].p[1]);
-		
-		segs[i].priv = new std::pair<point_t*,double>(segs[i].p[0],calc_cos(segs[i].p[0],segs[i].p[0])) ;
-		//TODO, compare angle
+		/* arg1 of calc_cos should be event point */
+		segs[i].priv = new std::pair<point_t,double>(segs[i].p[0],calc_cos(segs[i].p[0],segs[i].p[0])) ;
 		segment_insert(&sl,&segs[i]);
 		point_map[UPPER].insert(std::make_pair(segs[i].p[0],&segs[i]));
 		point_map[LOWER].insert(std::make_pair(segs[i].p[0],&segs[i]));
@@ -209,8 +223,9 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 		for(unsigned i = UPPER; i<= INTERIOR ;i++){
 			tmp_iter = start_iter[i];
 			while(tmp_iter!=end_iter[i]){
-				if(tmp_iter->second->priv)delete (point_t*)tmp_iter->second->priv;
-				tmp_iter->second->priv = new point_t(*pe_iter);
+				if(tmp_iter->second->priv)delete (std::pair<point_t,double>*)tmp_iter->second->priv;
+				
+				tmp_iter->second->priv = new std::pair<point_t,double>(*pe_iter,calc_cos(*pe_iter,tmp_iter->second->p[1]));
 				segment_insert(&sl,tmp_iter->second);
 				/* find its prev and next neighbors and test intersection */
 				prev_rb = rb_prev(&tmp_iter->second->rbnode);
