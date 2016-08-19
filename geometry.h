@@ -38,8 +38,9 @@ struct vector_t{
 };
 
 struct segment_t{
-	segment_t():priv(NULL){}
-    void init(const point_t & p1,const point_t & p2);
+	segment_t():priv(NULL){
+		rb_init_node(&rbnode);
+	}
     void print();
     // the input point is on one of end points of the segment
     // return true if it does
@@ -53,7 +54,6 @@ struct segment_t{
     //  input arg intersect_point is only meaningful if the return value is POINT
     //
     intersection_result_t intersect(const segment_t& s,point_t & intersect_point);
-    static segment_t create(const point_t & p1,const point_t & p2);
     void print()const;
     /* p[0]: smaller x if x is the same smaller y */
     struct point_t p[2];

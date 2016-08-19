@@ -19,17 +19,6 @@ bool same_segment(const segment_t & s1, const segment_t& s2)
 {
     return (s1.p[0] == s2.p[0]) && (s1.p[1] == s2.p[1]);
 }
-void segment_t::init(const point_t & p1,const point_t & p2)
-{
-    if(p1.x < p2.x || (p1.x == p2.x && p1.y < p2.y)){
-        p[0] = p1; p[1] = p2;
-    }
-    else{
-        p[0] = p2; p[1] = p1;
-    }
-    if(p[1].x - p[0].x == 0) gradient = DBL_MAX;
-    else gradient = (p[1].y - p[0].y ) / (p[1].x - p[0].x);
-}
 bool operator==(const point_t & p1, const point_t& p2)
 {
     return (p1.x == p2.x && p1.y == p2.y);
@@ -134,11 +123,6 @@ bool find_intersection_by_crammer_rule(const segment_t & s1,const segment_t & s2
     }
     return false;
 
-}
-segment_t segment_t::create(const point_t & p1,const point_t & p2){
-    segment_t s;
-    s.init(p1,p2);
-    return s;
 }
 double vector_t::cross_product(const vector_t& v)const{
 

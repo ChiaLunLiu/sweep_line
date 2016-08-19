@@ -56,7 +56,7 @@ class base_point_t: public point_t, public std::enable_shared_from_this<base_poi
 class point_compare{
   public:
        	bool operator()(const point_t & a,const point_t & b)const{
-               	return a.x > b.x || (a.x == b.x  && a.y > b.y);
+               	return a.y > b.y || (a.y == b.y  && a.x < b.x);
        	}
 };
 
@@ -106,7 +106,7 @@ class point_event{
 double calc_cos(const point_t & p1,const point_t & p2){
 
 	double X,Y;	
-	assert( p1.x == p2.x && p1.y == p2.y );
+	assert( p1.x != p2.x || (p1.x == p2.x && p1.y != p2.y) );
 	X = p2.x - p1.x;
 	Y = p2.y - p1.y;
 	return  X/sqrt(X*X + Y*Y);
@@ -154,18 +154,47 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 	point_t ip;
 	intersection_result_t res;
 	
-	/* insert all end points to point_event and to upper and lower map */
+	/* 
+	 * order the point in the segment, save UPPER point to p[0], and LOWER point to p[1]
+	 * insert all end points of segments to point_event and to upper and lower map */
 	for(size_t i = 0 ;i < segs.size() ; i++){
-		point_event.insert(segs[i].p[0]);
-		point_event.insert(segs[i].p[1]);
-		/* arg1 of calc_cos should be event point */
-		segs[i].priv = new std::pair<point_t,double>(segs[i].p[0],calc_cos(segs[i].p[0],segs[i].p[0])) ;
-		segment_insert(&sl,&segs[i]);
-		point_map[UPPER].insert(std::make_pair(segs[i].p[0],&segs[i]));
-		point_map[LOWER].insert(std::make_pair(segs[i].p[0],&segs[i]));
+		double tmp;
+		point_t& upper = segs[i].p[0]; 
+		point_t& lower = segs[i].p[1];
+		if( upper.y < lower.y || ( upper.y == lower.y && upper.x > lower.x  )){
+			swap(upper,lower);
+		}
+
+		point_event.insert(upper);
+		point_event.insert(lower);
+		if(upper.y == lower.y){
+			assert(upper.x != lower.x);
+			// it could be -1 or 1. 
+			tmp = 1;	
+		}
+		else{
+			tmp = calc_cos(upper,lower);
+		}
+		// first is x, second is angle 
+		// first would be set right before the segment is inserted into to sl 
+		segs[i].priv = new std::pair<double,double>;
+		((std::pair<double,double>*)segs[i].priv)->second = tmp;
+		point_map[UPPER].insert(std::make_pair(upper,&segs[i]));
+		point_map[LOWER].insert(std::make_pair(lower,&segs[i]));
 	}
-	
-	
+
+	// debug print
+//	for(pe_iter = point_event.begin() ; pe_iter != point_event.end(); pe_iter++){
+//		printf("(%.2lf,%.2lf)\n",pe_iter->x,pe_iter->y);
+//	}
+/*	puts("print segments");	
+	for(struct rb_node* rb_ptr = rb_first( &sl ); rb_ptr != NULL ; rb_ptr = rb_next(rb_ptr) ){
+		segment_t* tmp_seg = rb_entry(rb_ptr,segment_t,rbnode);	
+		//			next_seg = container_of(next_rb, segment_t, rbnode);
+		tmp_seg->print();
+		printf("cos= %.2lf\n",((std::pair<point_t,double>*)(tmp_seg->priv))->second);
+	}
+*/	
 	while( !point_event.empty()){
 		
 		pe_iter = point_event.begin();
@@ -177,7 +206,8 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 			end_iter[i]   = point_map[i].upper_bound(*pe_iter);
 			query_size[i] = point_map[i].count(*pe_iter);
 		}
-		
+	
+		// overlapped segments having the common end point would be counted as intersection	
 		if(query_size[0]+query_size[1] + query_size[2] >= 2){
 			/* intersection */
 			printf("intersect at %.2lf %.2lf\n",pe_iter->x,pe_iter->y);
@@ -191,29 +221,34 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 				}
 			}
 		}
-		
+		point_event.erase(pe_iter);
+		continue;
+			
 		/* remove segment in the range of start_iter[INTERIOR|LOWER] and end_inter[INTERIOR|LOWER] 
 		 * from sl 
 		 */
 		for(unsigned i = INTERIOR ; i <= LOWER ;i++){
 			tmp_iter = start_iter[i];
 			while(tmp_iter!=end_iter[i]){
-				next_rb = rb_next(&tmp_iter->second->rbnode);
-				prev_rb = rb_prev(&tmp_iter->second->rbnode);
-				if(prev_rb && next_rb ){
+
+				if(!RB_EMPTY_NODE(&tmp_iter->second->rbnode)){
+					next_rb = rb_next(&tmp_iter->second->rbnode);
+					prev_rb = rb_prev(&tmp_iter->second->rbnode);
+					if(prev_rb && next_rb ){
 					
-					next_seg = container_of(next_rb, segment_t, rbnode);
-					prev_seg = container_of(prev_rb, segment_t, rbnode);
-					res = prev_seg->intersect(*next_seg,ip);
-					//TODO, repeated ip in point_event
-					if(res == intersection_result_t::POINT){
-						point_event.insert(ip);
-						// TODO, index precision problem
-						point_map[INTERIOR].insert(std::make_pair(ip,prev_seg));
-						point_map[INTERIOR].insert(std::make_pair(ip,next_seg));
+						next_seg = container_of(next_rb, segment_t, rbnode);
+						prev_seg = container_of(prev_rb, segment_t, rbnode);
+						res = prev_seg->intersect(*next_seg,ip);
+						//TODO, repeated ip in point_event
+						if(res == intersection_result_t::POINT){
+							point_event.insert(ip);
+							// TODO, index precision problem
+							point_map[INTERIOR].insert(std::make_pair(ip,prev_seg));
+							point_map[INTERIOR].insert(std::make_pair(ip,next_seg));
+						}
 					}
+					rb_erase(&tmp_iter->second->rbnode, &sl);
 				}
-				rb_erase(&tmp_iter->second->rbnode, &sl);
 				tmp_iter++;
 			}
 		}
