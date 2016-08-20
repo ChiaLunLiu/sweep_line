@@ -187,16 +187,17 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 //	for(pe_iter = point_event.begin() ; pe_iter != point_event.end(); pe_iter++){
 //		printf("(%.2lf,%.2lf)\n",pe_iter->x,pe_iter->y);
 //	}
-/*	puts("print segments");	
+	
+	while( !point_event.empty()){
+		puts("print segments in sweep line set");	
 	for(struct rb_node* rb_ptr = rb_first( &sl ); rb_ptr != NULL ; rb_ptr = rb_next(rb_ptr) ){
 		segment_t* tmp_seg = rb_entry(rb_ptr,segment_t,rbnode);	
 		//			next_seg = container_of(next_rb, segment_t, rbnode);
 		tmp_seg->print();
-		printf("cos= %.2lf\n",((std::pair<point_t,double>*)(tmp_seg->priv))->second);
+		printf("cos= %.2lf\n",((std::pair<double,double>*)(tmp_seg->priv))->second);
 	}
-*/	
-	while( !point_event.empty()){
-		
+	
+	
 		pe_iter = point_event.begin();
 		
 		printf("next event point is %.2lf %.2lf\n",pe_iter->x,pe_iter->y);
@@ -221,17 +222,19 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 				}
 			}
 		}
-		point_event.erase(pe_iter);
-		continue;
+	//	continue;
 			
 		/* remove segment in the range of start_iter[INTERIOR|LOWER] and end_inter[INTERIOR|LOWER] 
 		 * from sl 
 		 */
 		for(unsigned i = INTERIOR ; i <= LOWER ;i++){
 			tmp_iter = start_iter[i];
+			// TODO, can't insert pair to point_map[INTERIOR] in the loop 
 			while(tmp_iter!=end_iter[i]){
 
 				if(!RB_EMPTY_NODE(&tmp_iter->second->rbnode)){
+					printf("remove segment\n");
+					tmp_iter->second->print();
 					next_rb = rb_next(&tmp_iter->second->rbnode);
 					prev_rb = rb_prev(&tmp_iter->second->rbnode);
 					if(prev_rb && next_rb ){
@@ -239,12 +242,18 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 						next_seg = container_of(next_rb, segment_t, rbnode);
 						prev_seg = container_of(prev_rb, segment_t, rbnode);
 						res = prev_seg->intersect(*next_seg,ip);
+						printf("test intersection of\n");
+						next_seg->print();
+						prev_seg->print();
 						//TODO, repeated ip in point_event
 						if(res == intersection_result_t::POINT){
-							point_event.insert(ip);
-							// TODO, index precision problem
-							point_map[INTERIOR].insert(std::make_pair(ip,prev_seg));
-							point_map[INTERIOR].insert(std::make_pair(ip,next_seg));
+							printf("intersect at (%.2lf,%.2lf)\n",ip.x,ip.y);
+							if(ip.y < pe_iter->y || (ip.y == pe_iter->y && ip.x > pe_iter->x) ){
+								point_event.insert(ip);
+								// TODO, index precision problem
+								point_map[INTERIOR].insert(std::make_pair(ip,prev_seg));
+								point_map[INTERIOR].insert(std::make_pair(ip,next_seg));
+							}
 						}
 					}
 					rb_erase(&tmp_iter->second->rbnode, &sl);
@@ -257,39 +266,53 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 		 */
 		for(unsigned i = UPPER; i<= INTERIOR ;i++){
 			tmp_iter = start_iter[i];
+			// TODO, can't insert pair to point_map[INTERIOR] in the loop 
 			while(tmp_iter!=end_iter[i]){
-				if(tmp_iter->second->priv)delete (std::pair<point_t,double>*)tmp_iter->second->priv;
+				((std::pair<double,double>*)(tmp_iter->second->priv))->first = pe_iter->x;
+				printf("insert segment, x = %.2lf\n",pe_iter->x);
+				tmp_iter->second->print();
 				
-				tmp_iter->second->priv = new std::pair<point_t,double>(*pe_iter,calc_cos(*pe_iter,tmp_iter->second->p[1]));
 				segment_insert(&sl,tmp_iter->second);
 				/* find its prev and next neighbors and test intersection */
 				prev_rb = rb_prev(&tmp_iter->second->rbnode);
 
 				if(prev_rb){
+
 					prev_seg = container_of(prev_rb, segment_t, rbnode);
+					printf("prev is \n");
+					prev_seg->print();
 					res = prev_seg->intersect(*(tmp_iter->second),ip);
 					if(res == intersection_result_t::POINT){
-						point_event.insert(ip);
-						// TODO, index precision problem
-						point_map[INTERIOR].insert(std::make_pair(ip,prev_seg));
-						point_map[INTERIOR].insert(std::make_pair(ip,tmp_iter->second));
+						printf("*** intersect at (%.2lf,%.2lf)\n",ip.x,ip.y);
+						if(ip.y < pe_iter->y || (ip.y == pe_iter->y && ip.x > pe_iter->x) ){
+							point_event.insert(ip);
+							// TODO, index precision problem
+							point_map[INTERIOR].insert(std::make_pair(ip,prev_seg));
+							point_map[INTERIOR].insert(std::make_pair(ip,tmp_iter->second));
+						}
 					}
 				}
 				
-				next_rb = rb_prev(&tmp_iter->second->rbnode);
+				next_rb = rb_next(&tmp_iter->second->rbnode);
 				if(next_rb){
 					next_seg = container_of(next_rb, segment_t, rbnode);
+					printf("next is \n");
+					next_seg->print();
 					res = next_seg->intersect(*(tmp_iter->second),ip);
 					if(res == intersection_result_t::POINT){
-						point_event.insert(ip);
-						// TODO, index precision problem
-						point_map[INTERIOR].insert(std::make_pair(ip,next_seg));
-						point_map[INTERIOR].insert(std::make_pair(ip,tmp_iter->second));
+						printf("intersect at (%.2lf,%.2lf)\n",ip.x,ip.y);
+						if(ip.y < pe_iter->y || (ip.y == pe_iter->y && ip.x > pe_iter->x) ){
+							point_event.insert(ip);
+							// TODO, index precision problem
+							point_map[INTERIOR].insert(std::make_pair(ip,next_seg));
+							point_map[INTERIOR].insert(std::make_pair(ip,tmp_iter->second));
+						}
 					}
 				}
 				tmp_iter++;
 			}
 		}
+		point_event.erase(pe_iter);
 	}
 	
 return 0;
