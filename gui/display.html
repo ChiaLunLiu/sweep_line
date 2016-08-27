@@ -1,18 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-<script type="text/javascript" src="http://mbostock.github.com/d3/d3.js">
+<script type="text/javascript" src="http://mbostock.github.com/d3/d3.js"></script>
 
-function updateData(){
+<script>
+
+function loadDoc() {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      document.getElementById("show").innerHTML = xhttp.responseText;
+    }
+  };
+  xhttp.open("POST", "http://localhost:5555/random", true);
+  xhttp.send("action=restart&test=123");
+}
+
+function mytest(){
+   document.getElementById("m1").innerHTML = "Hello World";
 }
 </script>    
 </head>
 <body>
     <div id="option">
-    <input name="updateButton" 
-           type="button" 
-           value="Update" />
+	<button onclick="loadDoc()">new testcase</button> 
+	<button onclick="mytest()">Click me</button>
     </div>
+
+    <p id="show">hihi</p>
 
     <div id="viz"></div>
     <script type="text/javascript">

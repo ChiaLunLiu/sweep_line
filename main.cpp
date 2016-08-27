@@ -21,7 +21,7 @@ int main()
 		s.p[0].y = rand()%200  -100;
 		s.p[1].x = rand()%200  -100;
 		s.p[1].y = rand()%200  -100;
-		s.init(s.p[0],s.p[1]);
+//		s.init();
 		s.print();
 		segs.push_back(s);
 	}
