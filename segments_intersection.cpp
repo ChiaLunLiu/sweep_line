@@ -6,6 +6,8 @@
 #include<utility>
 #include<cassert>
 #include "geometry.h"
+
+extern FILE* log_fp;
 namespace{
 
 
@@ -59,10 +61,26 @@ class point_compare{
                	return a.y > b.y || (a.y == b.y  && a.x < b.x);
        	}
 };
-
 bool point_comparator(const point_t & a,const point_t & b){
 	return a.x > b.x || (a.x == b.x  && a.y > b.y);
 }
+
+class segment_ptr_compare{
+  public:
+	typedef segment_t* segment_t_ptr;
+       	bool operator()(const segment_t_ptr & a,const segment_t_ptr & b)const{
+		if( point_comparator(a->p[0],b->p[0] )){
+			return true;
+		}
+		else if(point_comparator( b->p[0],a->p[0])){
+			return true;
+		}
+		else{
+			// a->p[0] and b->p[0] are the same
+			return point_comparator(a->p[1],b->p[1]);
+		}
+       	}
+};
 
 bool point_cos0_comparator(const std::pair<point_t,double>& a,const std::pair<point_t,double>& b){
 	// pair::second keeps cos0 value
@@ -138,7 +156,9 @@ void segment_insert(struct rb_root *root, segment_t *data){
 
 
 
-
+/*
+ * extra same segments are filtered
+ */
 int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_t>& intersection_points){
 
 	/* do not change the order of enum, for loop assumes this order */
@@ -147,12 +167,17 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 	std::set<point_t,point_compare>::iterator pe_iter;
 	struct rb_root sl = RB_ROOT;
 	struct rb_node* prev_rb,*next_rb;
-	segment_t* prev_seg,*next_seg;
-	multimap<point_t,segment_t*,point_compare> point_map[ENUM_MAX];
-	unsigned int query_size[ENUM_MAX];
-	multimap<point_t,segment_t*,point_compare>::iterator start_iter[ENUM_MAX],end_iter[ENUM_MAX],tmp_iter;
+	segment_t* prev_seg,*next_seg, * tmp_seg;
+	map<point_t,std::set<segment_t*,segment_ptr_compare>, point_compare> point_map[ENUM_MAX];
+	std::set<segment_t*,segment_ptr_compare>* segset[ENUM_MAX]; 
+	std::set<segment_t*,segment_ptr_compare> dummy; 	
+//start_iter[ENUM_MAX],end_iter[ENUM_MAX],tmp_iter;
+
 	point_t ip;
 	intersection_result_t res;
+
+
+	// TODO, filter the same segment
 	
 	/* 
 	 * order the point in the segment, save UPPER point to p[0], and LOWER point to p[1]
@@ -161,6 +186,8 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 		double tmp;
 		point_t& upper = segs[i].p[0]; 
 		point_t& lower = segs[i].p[1];
+		rb_init_node(&segs[i].rbnode);
+		
 		if( upper.y < lower.y || ( upper.y == lower.y && upper.x > lower.x  )){
 			swap(upper,lower);
 		}
@@ -179,8 +206,8 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 		// first would be set right before the segment is inserted into to sl 
 		segs[i].priv = new std::pair<double,double>;
 		((std::pair<double,double>*)segs[i].priv)->second = tmp;
-		point_map[UPPER].insert(std::make_pair(upper,&segs[i]));
-		point_map[LOWER].insert(std::make_pair(lower,&segs[i]));
+		point_map[UPPER][upper].insert(&segs[i]);
+		point_map[LOWER][lower].insert(&segs[i]);
 	}
 
 	// debug print
@@ -190,53 +217,49 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 	
 	while( !point_event.empty()){
 		puts("print segments in sweep line set");	
-	for(struct rb_node* rb_ptr = rb_first( &sl ); rb_ptr != NULL ; rb_ptr = rb_next(rb_ptr) ){
-		segment_t* tmp_seg = rb_entry(rb_ptr,segment_t,rbnode);	
-		//			next_seg = container_of(next_rb, segment_t, rbnode);
-		tmp_seg->print();
-		printf("cos= %.2lf\n",((std::pair<double,double>*)(tmp_seg->priv))->second);
-	}
+		for(struct rb_node* rb_ptr = rb_first( &sl ); rb_ptr != NULL ; rb_ptr = rb_next(rb_ptr) ){
+			segment_t* tmp_seg = rb_entry(rb_ptr,segment_t,rbnode);	
+			tmp_seg->print();
+			printf("cos= %.2lf\n",((std::pair<double,double>*)(tmp_seg->priv))->second);
+		}
 	
 	
 		pe_iter = point_event.begin();
-		
+		if(log_fp)fprintf(log_fp,"next %.2lf %.2lf\n",pe_iter->x,pe_iter->y);
 		printf("next event point is %.2lf %.2lf\n",pe_iter->x,pe_iter->y);
 	
 		for(unsigned i = 0 ;i < ENUM_MAX;i++){
-			start_iter[i] = point_map[i].lower_bound(*pe_iter);
-			end_iter[i]   = point_map[i].upper_bound(*pe_iter);
-			query_size[i] = point_map[i].count(*pe_iter);
+			if(point_map[i].count(*pe_iter) > 0 )segset[i] = &point_map[i][*pe_iter];
+			else segset[i]=  &dummy;
 		}
 	
 		// overlapped segments having the common end point would be counted as intersection	
-		if(query_size[0]+query_size[1] + query_size[2] >= 2){
-			/* intersection */
+		if(segset[UPPER]->size()+ segset[INTERIOR]->size()+ segset[LOWER]->size() >= 2){
+			// intersection
 			printf("intersect at %.2lf %.2lf\n",pe_iter->x,pe_iter->y);
+			if(log_fp)fprintf(log_fp,"intersect %.2lf %.2lf\n",pe_iter->x,pe_iter->y);
 			printf("segments are:\n");
 			for(unsigned i = 0 ;i < ENUM_MAX;i++){
-				tmp_iter = start_iter[i];
-				while(tmp_iter!=end_iter[i]){
-				printf("(%.2lf,%.2lf) (%.2lf,%.2lf)\n",tmp_iter->second->p[0].x,tmp_iter->second->p[0].y,
-													   tmp_iter->second->p[1].x,tmp_iter->second->p[1].y);
-				tmp_iter++;
-				}
+				for( std::set<segment_t*,segment_ptr_compare>::iterator it = segset[i]->begin(); 
+					it!= segset[i]->end() ; it++)
+				printf("(%.2lf,%.2lf) (%.2lf,%.2lf)\n",(*it)->p[0].x,(*it)->p[0].y,
+								       (*it)->p[1].x,(*it)->p[1].y);
 			}
 		}
-	//	continue;
 			
-		/* remove segment in the range of start_iter[INTERIOR|LOWER] and end_inter[INTERIOR|LOWER] 
-		 * from sl 
-		 */
+		// remove segment in the range of start_iter[INTERIOR|LOWER] and end_inter[INTERIOR|LOWER] 
+		// from sl 
+		//
 		for(unsigned i = INTERIOR ; i <= LOWER ;i++){
-			tmp_iter = start_iter[i];
-			// TODO, can't insert pair to point_map[INTERIOR] in the loop 
-			while(tmp_iter!=end_iter[i]){
-
-				if(!RB_EMPTY_NODE(&tmp_iter->second->rbnode)){
-					printf("remove segment\n");
-					tmp_iter->second->print();
-					next_rb = rb_next(&tmp_iter->second->rbnode);
-					prev_rb = rb_prev(&tmp_iter->second->rbnode);
+			for( std::set<segment_t*,segment_ptr_compare>::iterator it = segset[i]->begin(); 
+					it!= segset[i]->end() ; it++){
+				tmp_seg = *it;
+				if(!RB_EMPTY_NODE(&tmp_seg->rbnode)){
+					printf("%s remove segment\n", i == INTERIOR ? "interior":"lower");
+					if(log_fp)fflush(log_fp);
+					tmp_seg->print();
+					next_rb = rb_next(&tmp_seg->rbnode);
+					prev_rb = rb_prev(&tmp_seg->rbnode);
 					if(prev_rb && next_rb ){
 					
 						next_seg = container_of(next_rb, segment_t, rbnode);
@@ -251,69 +274,82 @@ int find_all_intersection_points(std::vector<segment_t>& segs,std::vector<point_
 							if(ip.y < pe_iter->y || (ip.y == pe_iter->y && ip.x > pe_iter->x) ){
 								point_event.insert(ip);
 								// TODO, index precision problem
-								point_map[INTERIOR].insert(std::make_pair(ip,prev_seg));
-								point_map[INTERIOR].insert(std::make_pair(ip,next_seg));
+								point_map[INTERIOR][ip].insert(prev_seg);
+								point_map[INTERIOR][ip].insert(next_seg);
 							}
 						}
 					}
-					rb_erase(&tmp_iter->second->rbnode, &sl);
+					rb_erase(&tmp_seg->rbnode, &sl);
+				
+					rb_init_node(&tmp_seg->rbnode);
 				}
-				tmp_iter++;
+				else assert("not empty node");
 			}
 		}
-		/* insert segments in the range of start_iter[UPPER|INTERIOR] and end_inter[UPPER|INTERIOR] 
-		 * to sl
-		 */
+
+		// insert segments in the range of start_iter[UPPER|INTERIOR] and end_inter[UPPER|INTERIOR] 
+		// to sl
+		//
 		for(unsigned i = UPPER; i<= INTERIOR ;i++){
-			tmp_iter = start_iter[i];
 			// TODO, can't insert pair to point_map[INTERIOR] in the loop 
-			while(tmp_iter!=end_iter[i]){
-				((std::pair<double,double>*)(tmp_iter->second->priv))->first = pe_iter->x;
+			for( std::set<segment_t*,segment_ptr_compare>::iterator it = segset[i]->begin(); 
+					it!= segset[i]->end() ; it++){
+
+				tmp_seg = *it;
+				((std::pair<double,double>*)(tmp_seg->priv))->first = pe_iter->x;
 				printf("insert segment, x = %.2lf\n",pe_iter->x);
-				tmp_iter->second->print();
+				tmp_seg->print();
 				
-				segment_insert(&sl,tmp_iter->second);
-				/* find its prev and next neighbors and test intersection */
-				prev_rb = rb_prev(&tmp_iter->second->rbnode);
+				if(!RB_EMPTY_NODE(&tmp_seg->rbnode)){
+					fprintf(stderr,"not empty node\n");
+				}
+				segment_insert(&sl,tmp_seg);
+				// find its prev and next neighbors and test intersection
+				prev_rb = rb_prev(&tmp_seg->rbnode);
 
 				if(prev_rb){
 
 					prev_seg = container_of(prev_rb, segment_t, rbnode);
 					printf("prev is \n");
 					prev_seg->print();
-					res = prev_seg->intersect(*(tmp_iter->second),ip);
+					res = prev_seg->intersect(*tmp_seg,ip);
 					if(res == intersection_result_t::POINT){
 						printf("*** intersect at (%.2lf,%.2lf)\n",ip.x,ip.y);
 						if(ip.y < pe_iter->y || (ip.y == pe_iter->y && ip.x > pe_iter->x) ){
 							point_event.insert(ip);
 							// TODO, index precision problem
-							point_map[INTERIOR].insert(std::make_pair(ip,prev_seg));
-							point_map[INTERIOR].insert(std::make_pair(ip,tmp_iter->second));
+							point_map[INTERIOR][ip].insert(prev_seg);
+							point_map[INTERIOR][ip].insert(tmp_seg);
 						}
 					}
 				}
 				
-				next_rb = rb_next(&tmp_iter->second->rbnode);
+				next_rb = rb_next(&tmp_seg->rbnode);
 				if(next_rb){
 					next_seg = container_of(next_rb, segment_t, rbnode);
 					printf("next is \n");
 					next_seg->print();
-					res = next_seg->intersect(*(tmp_iter->second),ip);
+					res = next_seg->intersect(*tmp_seg,ip);
 					if(res == intersection_result_t::POINT){
 						printf("intersect at (%.2lf,%.2lf)\n",ip.x,ip.y);
 						if(ip.y < pe_iter->y || (ip.y == pe_iter->y && ip.x > pe_iter->x) ){
 							point_event.insert(ip);
 							// TODO, index precision problem
-							point_map[INTERIOR].insert(std::make_pair(ip,next_seg));
-							point_map[INTERIOR].insert(std::make_pair(ip,tmp_iter->second));
+							point_map[INTERIOR][ip].insert(next_seg);
+							point_map[INTERIOR][ip].insert(tmp_seg);
 						}
 					}
 				}
-				tmp_iter++;
 			}
 		}
 		point_event.erase(pe_iter);
 	}
-	
+	// check
+	for(struct rb_node* rb_ptr = rb_first( &sl ); rb_ptr != NULL ; rb_ptr = rb_next(rb_ptr) ){
+		segment_t* tmp_seg = rb_entry(rb_ptr,segment_t,rbnode);	
+		tmp_seg->print();
+		printf("cos= %.2lf\n",((std::pair<double,double>*)(tmp_seg->priv))->second);
+		assert( 0 && "rb is not empty in the end");
+	}
 return 0;
 }

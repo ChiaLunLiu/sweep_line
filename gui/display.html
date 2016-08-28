@@ -4,31 +4,89 @@
 <script type="text/javascript" src="http://mbostock.github.com/d3/d3.js"></script>
 
 <script>
-
+var g_input = null;
+var g_idx;
+var g_drawboard_svg = null;
 function loadDoc() {
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function() {
-    if (xhttp.readyState == 4 && xhttp.status == 200) {
-      document.getElementById("show").innerHTML = xhttp.responseText;
-    }
-  };
-  xhttp.open("POST", "http://localhost:5555/random", true);
-  xhttp.send("action=restart&test=123");
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+		g_input = null;
+		if (xhttp.readyState == 4 && xhttp.status == 200) {
+			g_input = xhttp.responseText.split("\n");
+			g_idx = 0;
+        	}
+  	};
+
+  	xhttp.open("POST", "http://localhost:5555/random", true);
+  	xhttp.send("action=restart&test=123");
 }
 
-function mytest(){
-   document.getElementById("m1").innerHTML = "Hello World";
+function next_step(){
+	if( g_input == null){
+		return;
+	}
+	 // document.getElementById("show").innerHTML = xhttp.responseText;
+	if( g_idx == 0){	
+		var num = parseInt(g_input[0]);
+        	document.getElementById("debug").innerHTML += g_input[0];
+		g_drawboard_svg = d3.select("#draw_board")
+        			.append("svg")
+        			.attr("width", 200)
+        			.attr("height", 200);    
+
+		for (i = 0; i < num; i++) {
+			var arr2 = g_input[i+1].split(" ");
+       			document.getElementById("debug").innerHTML += arr2[0]+","+arr2[1]+","+arr2[2]+","+arr2[3]+"</br>";
+    
+    			g_drawboard_svg.append("line")
+			.attr("stroke","green")
+			.attr("stroke-width",4)
+        		.attr("x1", parseInt(arr2[0]))
+        		.attr("y1", parseInt(arr2[1]))
+        		.attr("x2", parseInt(arr2[2]))
+        		.attr("y2", parseInt(arr2[3]));
+		}
+		g_idx = num + 1;
+	}
+
+	else if( g_idx < g_input.length){
+		// line format could be
+		// next x y
+		// intersect x y
+		var arr2 = g_input[g_idx].split(" ");
+		if( arr2[0] == "next"){
+    			g_drawboard_svg.append("circle")
+			.style("stroke", "red")
+        		.attr("cx", parseInt(arr2[1]))
+        		.attr("cy", parseInt(arr2[2]))
+        		.attr("r", 3)
+		}
+		else{
+			sampleSVG.append("circle")
+			.style("stroke", "green")
+			.attr("cx", parseInt(arr2[1]))
+			.attr("cy", parseInt(arr2[2]))
+			.attr("r", 3)
+		}
+		g_idx++;
+	}
+	else{
+		alert("no more input");
+	}	
+	
+
 }
 </script>    
 </head>
 <body>
+    <div id="debug"></div>
     <div id="option">
 	<button onclick="loadDoc()">new testcase</button> 
-	<button onclick="mytest()">Click me</button>
+	<button onclick="next_step()">Click me</button>
     </div>
 
     <p id="show">hihi</p>
-
+    <div id="draw_board"></div>
     <div id="viz"></div>
     <script type="text/javascript">
 
@@ -37,12 +95,13 @@ function mytest(){
         .attr("width", 100)
         .attr("height", 100);    
 
-    sampleSVG.append("circle")
-        .style("stroke", "gray")
-        .style("fill", "white")
-        .attr("r", 40)
-        .attr("cx", 50)
-        .attr("cy", 50)
+    sampleSVG.append("line")
+        .attr("stroke", "gray")
+	.attr("stroke-width", 5)
+        .attr("x1", 0)
+        .attr("y1", 0)
+        .attr("x2", 50)
+        .attr("y2", 50)
         .on("mouseover", function(){d3.select(this).style("fill", "aliceblue");})
         .on("mouseout", function(){d3.select(this).style("fill", "white");});
     

@@ -71,8 +71,10 @@ void OnReq(evhttp_request *req, void *arg){
 	printf("action = %s\n",action);
 	if(action){
 		if(!strcmp(action,"restart")){
-			// gen testcase
-			evbuffer_add_printf(OutBuf,"hihihihihi");		
+			// generate output
+			printf("call restart\n");
+		//	system("../a.out segment_intersect.log");
+			append_file(OutBuf,"segment_intersect.log");
 		}
 		else{
 			assert("no such action");
