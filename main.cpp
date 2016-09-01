@@ -5,15 +5,15 @@
 #include<cstdlib>
 #include "geometry.h"
 #include "segments_intersection.h"
-#define DEFAULT_NUM 8
-#define VALUE_RANGE 20
+#define DEFAULT_NUM 64
+#define VALUE_RANGE 500
 #define VALUE_BASE 0
 // argv[1]: file log
 // argv[2]: size of testcase
 FILE* log_fp;
 void bye (void)
 {
-  fclose(log_fp);
+//  if(log_fp)fclose(log_fp);
   puts("Goodbye, cruel world....");
 }
 int main(int argc, char** argv)

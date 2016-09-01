@@ -7,6 +7,7 @@
 var g_input = null;
 var g_idx;
 var g_drawboard_svg = null;
+var g_num = 8;
 function loadDoc() {
 	var xhttp = new XMLHttpRequest();
 	xhttp.onreadystatechange = function() {
@@ -18,7 +19,8 @@ function loadDoc() {
   	};
 
   	xhttp.open("POST", "http://localhost:5555/random", true);
-  	xhttp.send("action=restart&test=123");
+	xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+  	xhttp.send("action=restart&test=123");// + g_num.toString());
 }
 
 function next_step(){
@@ -31,8 +33,8 @@ function next_step(){
         	document.getElementById("debug").innerHTML += g_input[0];
 		g_drawboard_svg = d3.select("#draw_board")
         			.append("svg")
-        			.attr("width", 200)
-        			.attr("height", 200);    
+        			.attr("width", 800)
+        			.attr("height", 600);    
 
 		for (i = 0; i < num; i++) {
 			var arr2 = g_input[i+1].split(" ");
@@ -62,11 +64,12 @@ function next_step(){
         		.attr("r", 3)
 		}
 		else{
-			sampleSVG.append("circle")
+        		document.getElementById("debug").innerHTML += "HIT";
+			g_drawboard_svg.append("circle")
 			.style("stroke", "green")
-			.attr("cx", parseInt(arr2[1]))
+			.attr("cx", parseInt(arr2[1]) )
 			.attr("cy", parseInt(arr2[2]))
-			.attr("r", 3)
+			.attr("r", 8)
 		}
 		g_idx++;
 	}
